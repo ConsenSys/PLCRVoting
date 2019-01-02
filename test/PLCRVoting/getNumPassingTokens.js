@@ -10,7 +10,7 @@ const BN = require('bn.js');
 
 contract('PLCRVoting', (accounts) => {
   describe('Function: getNumPassingTokens', () => {
-    const [alice] = accounts;
+    const [alice, bob] = accounts;
     let plcr;
     let token;
 
@@ -111,7 +111,28 @@ contract('PLCRVoting', (accounts) => {
       assert(false, 'was able to call getNumPassingTokens on a poll without revealing a vote');
     });
 
-    it('should return 0 if the queried tokens were committed to the minority bloc');
+    it('should return 0 if the queried tokens were committed to the minority bloc', () => {
+      const options = utils.defaultOptions();
+      options.actor = alice;
+      options.vote = '1';
+      options.numTokens = '100';
+
+      const loserOptions = utils.defaultOptions();
+      loserOptions.actor = bob;
+      loserOptions.vote = '0';
+      loserOptions.numTokens = '5';
+
+      const pollID = await utils.startPollAndCommitVote(options, plcr);
+      await utils.commitAs(pollID, loserOptions, plcr);
+      await utils.increaseTime(new BN(options.commitPeriod, 10).add(new BN('1', 10)).toNumber(10));
+
+      await utils.as(options.actor, plcr.revealVote, pollID, options.vote, options.salt);
+      await utils.increaseTime(new BN(options.revealPeriod, 10).add(new BN('1', 10)).toNumber(10));
+
+      const loserPassingTokens = await plcr.getNumPassingTokens.call(loserOptions.actor, pollID);
+
+      assert.strictEqual(loserPassingTokens.toString(), '0', 'number of winning tokens for losing voter were not equal to 0');
+    });
   });
 });
 
